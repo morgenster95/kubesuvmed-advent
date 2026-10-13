@@ -1,0 +1,29 @@
+rules_version = '2';
+// Pravidla pro Firestore – vložte do Firebase Console → Firestore Database → Rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Profil a postup uživatele: každý čte a zapisuje jen svůj dokument.
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'name', 'newsletter', 'createdAt', 'lastSeenAt',
+             'opened', 'openedPreview', 'entries', 'entriesPreview'])
+        && (!('newsletter' in request.resource.data) || request.resource.data.newsletter is bool);
+      allow delete: if false;
+    }
+
+    // Soutěžní odpovědi: jen vlastní, jen jednou (bez úprav), max. 1000 znaků.
+    match /entries/{entryId} {
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && entryId.matches(request.auth.uid + '_(nahled_)?[0-9]+')
+        && request.resource.data.answer is string
+        && request.resource.data.answer.size() >= 3
+        && request.resource.data.answer.size() <= 1000
+        && request.resource.data.day in [5, 12, 19];
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}
