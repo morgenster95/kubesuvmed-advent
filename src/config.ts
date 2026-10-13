@@ -6,10 +6,12 @@
  *    Dokud je apiKey prázdný, web běží v UKÁZKOVÉM režimu (přihlášení jen e-mailem, data jen v prohlížeči).
  */
 export const FIREBASE = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  appId: '',
+  apiKey: 'AIzaSyCX8rTyVYunrnZS7vMC58d2eqQTs3aiABk',
+  authDomain: 'kubesuvmed-advent.firebaseapp.com',
+  projectId: 'kubesuvmed-advent',
+  storageBucket: 'kubesuvmed-advent.firebasestorage.app',
+  messagingSenderId: '285914020856',
+  appId: '1:285914020856:web:93073dad155c693f94f40d',
 };
 
 /** 'draft' = u kupónů a soutěží se ukazuje upozornění „ukázkový obsah“. Před spuštěním přepněte na 'live'. */
