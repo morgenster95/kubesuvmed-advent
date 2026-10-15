@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight, Eye, Gift, Music, Share2, Sparkles, Volume2, VolumeX, LogIn, Heart, Leaf, Truck, Award } from 'lucide-react';
 import { availableDay, BASE, CONTEST_DAYS, doors as ALL_DOORS } from './content';
-import { CONTENT_MODE, PREVIEW_KEY } from './config';
+import { CONTENT_MODE, DEMO_MODE, PREVIEW_KEY } from './config';
 import { backend } from './backend';
 import type { Door, Progress, User } from './types';
 import { Honeycomb } from './components/Honeycomb';
@@ -42,8 +42,14 @@ function useCountdown() {
 
 const plural = (n: number, one: string, few: string, many: string) => (n === 1 ? one : n >= 2 && n <= 4 ? few : many);
 
+/* Ukázkový režim: host bez přihlášení, postup jen v tomto prohlížeči. */
+const GUEST_KEY = 'kmed-demo-host';
+const EMPTY: Progress = { opened: {}, entries: [], newsletter: false };
+function loadGuest(): Progress { try { return { ...EMPTY, ...JSON.parse(localStorage.getItem(GUEST_KEY) || '{}') }; } catch { return EMPTY; } }
+function saveGuest(p: Progress) { try { localStorage.setItem(GUEST_KEY, JSON.stringify(p)); } catch { /* */ } }
+
 export default function App() {
-  const [preview, setPreview] = useState(readPreview);
+  const [preview, setPreview] = useState(() => DEMO_MODE || readPreview());
   const [today, setToday] = useState(() => availableDay());
   const max = preview ? 24 : today;
   const [user, setUser] = useState<User | null>(null);
@@ -78,7 +84,7 @@ export default function App() {
 
   // postup uživatele
   useEffect(() => {
-    if (!user) { setProgress({ opened: {}, entries: [], newsletter: false }); return; }
+    if (!user) { setProgress(DEMO_MODE ? loadGuest() : EMPTY); return; }
     backend.load(user, preview).then(setProgress).catch(() => notify('Nepodařilo se načíst vaše okénka. Zkuste obnovit stránku.'));
   }, [user, preview, notify]);
 
@@ -121,14 +127,14 @@ export default function App() {
       notify(max === 0 ? `Trpělivost, med se nekvapí. Okénko ${day} se otevře ${day}. prosince.` : `Okénko ${day} se otevře ${day}. prosince. Na dobré věci se vyplatí počkat.`);
       return;
     }
-    if (!user) { setLogin({ open: true, reason: 'Přihlaste se a otevřete okénko', pendingDay: day }); return; }
+    if (!user && !DEMO_MODE) { setLogin({ open: true, reason: 'Přihlaste se a otevřete okénko', pendingDay: day }); return; }
     const already = !!progress.opened[day];
     if (!already) {
       setOpening(day);
       await new Promise((r) => setTimeout(r, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 750));
       setOpening(null);
-      setProgress((p) => ({ ...p, opened: { ...p.opened, [day]: new Date().toISOString() } }));
-      backend.markOpened(user, day, preview).catch(() => notify('Okénko se nepodařilo uložit k účtu. Zkuste to prosím znovu.'));
+      setProgress((p) => { const n = { ...p, opened: { ...p.opened, [day]: new Date().toISOString() } }; if (!user) saveGuest(n); return n; });
+      if (user) backend.markOpened(user, day, preview).catch(() => notify('Okénko se nepodařilo uložit k účtu. Zkuste to prosím znovu.'));
       setBurst((b) => b + 1);
     }
     setModalDay(day);
@@ -187,8 +193,8 @@ export default function App() {
     <>
       {preview && (
         <div className="preview-bar">
-          <Eye size={15} /> Náhled: všechna okénka odemčená{draft ? ' · obsah je ukázkový' : ''}
-          <button onClick={() => { try { sessionStorage.removeItem('kmed-nahled'); } catch { /* */ } setPreview(false); }}>Ukončit</button>
+          <Eye size={15} /> {DEMO_MODE ? 'Ukázková verze pro prezentaci – všechna okénka lze proklikat bez přihlášení' : 'Náhled: všechna okénka odemčená'}{draft && !DEMO_MODE ? ' · obsah je ukázkový' : ''}
+          {!DEMO_MODE && <button onClick={() => { try { sessionStorage.removeItem('kmed-nahled'); } catch { /* */ } setPreview(false); }}>Ukončit</button>}
         </div>
       )}
 
@@ -205,7 +211,7 @@ export default function App() {
               {sound ? <Volume2 size={17} /> : <VolumeX size={17} />}<span className="hide-sm">{sound ? 'Hudba hraje' : 'Hudba'}</span>
             </button>
             <button className="chip hide-xs" onClick={share} aria-label="Sdílet kalendář"><Share2 size={16} /></button>
-            {user ? (
+            {user || DEMO_MODE ? (
               <button className="chip gold" onClick={() => setDrawer(true)}>
                 <Gift size={16} /><span>Moje dárky</span>{openedCount > 0 && <b className="badge">{openedCount}</b>}
               </button>
@@ -262,7 +268,7 @@ export default function App() {
           </div>
           <div className="cal-bar">
             <div className="progress">
-              <span>{user ? <><b>{openedCount}</b> z 24 radostí objeveno</> : 'Přihlaste se a začněte sbírat radosti'}</span>
+              <span>{user || DEMO_MODE ? <><b>{openedCount}</b> z 24 radostí objeveno</> : 'Přihlaste se a začněte sbírat radosti'}</span>
               <div className="track"><i style={{ width: `${(openedCount / 24) * 100}%` }} /></div>
             </div>
             <span className="status">{status}</span>
@@ -378,12 +384,12 @@ export default function App() {
         onShare={share}
         onCopy={copy}
         onEnter={async (day, answer) => {
-          if (!user) throw new Error('Nejste přihlášeni.');
+          if (!user && !DEMO_MODE) throw new Error('Nejste přihlášeni.');
           if (!CONTEST_DAYS.includes(day)) throw new Error('Soutěž v tomto okénku neprobíhá.');
           const a = answer.trim();
           if (a.length < 3) throw new Error('Odpověď prosím napište alespoň třemi znaky.');
-          await backend.submitEntry(user, day, a, preview);
-          setProgress((p) => ({ ...p, entries: [...p.entries, day] }));
+          if (user) await backend.submitEntry(user, day, a, preview);
+          setProgress((p) => { const n = { ...p, entries: [...p.entries, day] }; if (!user) saveGuest(n); return n; });
           setBurst((b) => b + 1);
         }}
       />

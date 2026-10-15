@@ -24,3 +24,10 @@ export const CONTENT_MODE: 'draft' | 'live' = 'draft';
 export const PREVIEW_KEY = 'medovyadvent';
 
 export const firebaseEnabled = () => !!FIREBASE.apiKey && !!FIREBASE.projectId;
+
+/**
+ * UKÁZKOVÁ VERZE PRO PREZENTACI
+ * true = vše je odemčené a dá se proklikat bez přihlášení (postup se ukládá jen v prohlížeči).
+ * Před ostrým spuštěním kampaně přepněte na false.
+ */
+export const DEMO_MODE = true;
